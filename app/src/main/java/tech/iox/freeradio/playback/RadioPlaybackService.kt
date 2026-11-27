@@ -47,7 +47,7 @@ class RadioPlaybackService : Service() {
             .getFloat(KEY_FREQUENCY, DEFAULT_FREQUENCY)
         createNotificationChannel()
 
-        mediaSession = MediaSession(this, "Free Radio").apply {
+        mediaSession = MediaSession(this, "Radio").apply {
             setFlags(
                 MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or
                     MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
@@ -153,7 +153,7 @@ class RadioPlaybackService : Service() {
         mediaSession?.setMetadata(
             MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_TITLE, frequencyLabel)
-                .putString(MediaMetadata.METADATA_KEY_ARTIST, "Free Radio")
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, "Radio")
                 .build()
         )
         mediaSession?.setPlaybackState(
@@ -171,7 +171,7 @@ class RadioPlaybackService : Service() {
     private fun buildNotification(playing: Boolean) =
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("Free Radio")
+            .setContentTitle("Radio")
             .setContentText(
                 if (playing) String.format(Locale.US, "Tuned to %.1f MHz", lastFrequency)
                 else "Radio paused"
@@ -217,7 +217,7 @@ class RadioPlaybackService : Service() {
             "Radio playback",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Controls for Free Radio"
+            description = "Radio playback controls"
             setShowBadge(false)
         }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
