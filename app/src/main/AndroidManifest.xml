@@ -12,9 +12,10 @@
 
     <application
         android:allowBackup="true"
-        android:label="Free Radio"
+        android:icon="@drawable/ic_radio_launcher"
+        android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.NoActionBar">
+        android:theme="@style/Theme.FreeRadio">
 
         <activity
             android:name=".MainActivity"
