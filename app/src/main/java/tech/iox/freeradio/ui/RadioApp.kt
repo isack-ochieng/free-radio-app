@@ -145,7 +145,7 @@ fun RadioApp(viewModel: RadioViewModel) {
                 AppTab.RADIO -> RadioHomeScreen(
                     state, viewModel::togglePlayback, viewModel::tuneStep, viewModel::tuneTo,
                     viewModel::toggleFavourite, { selectedTab = AppTab.SCAN },
-                    { selectedTab = AppTab.SAVED }, viewModel::setVolume, viewModel::openDeviceRadio
+                    { selectedTab = AppTab.SAVED }, viewModel::setVolume
                 )
                 AppTab.SAVED -> FavouritesScreen(
                     state.favourites, state.frequencyMhz,
@@ -159,7 +159,7 @@ fun RadioApp(viewModel: RadioViewModel) {
                     onToggle = viewModel::toggleReminder,
                     onDelete = viewModel::deleteReminder
                 )
-                AppTab.SCAN -> ScannerScreen(state, viewModel::scan, viewModel::openDeviceRadio)
+                AppTab.SCAN -> ScannerScreen(state, viewModel::scan)
                 AppTab.SETTINGS -> SettingsScreen(state, viewModel::setVolume)
             }
         }
@@ -192,8 +192,7 @@ private fun RadioHomeScreen(
     onFavourite: () -> Unit,
     onScan: () -> Unit,
     onOpenSaved: () -> Unit,
-    onVolume: (Float) -> Unit,
-    onOpenDeviceRadio: () -> Unit
+    onVolume: (Float) -> Unit
 ) {
     val favouriteKey = String.format(Locale.US, "%.1f", state.frequencyMhz)
     val isFavourite = state.favourites.any { it.key == favouriteKey }
@@ -321,16 +320,6 @@ private fun RadioHomeScreen(
             }
         }
 
-        if (state.oemRadioAppName != null) {
-            InfoPanel("Phone radio available",
-                "${state.oemRadioAppName} is installed. This phone keeps FM receiver access in its manufacturer app.",
-                RadioAccent)
-            Button(onClick = onOpenDeviceRadio,
-                colors = ButtonDefaults.buttonColors(containerColor = RadioAccent, contentColor = RadioBackground),
-                shape = RoundedCornerShape(13.dp), modifier = Modifier.fillMaxWidth()) {
-                Text("OPEN PHONE RADIO", fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
-            }
-        }
         if (state.audioRoute.wiredHeadsetConnected) {
             InfoPanel("Wired connection detected",
                 "The cable may act as the FM antenna on phones wired for headset reception.", RadioAccent)
@@ -592,7 +581,7 @@ private fun formatTime(hour: Int, minute: Int): String {
 }
 
 @Composable
-private fun ScannerScreen(state: RadioUiState, onScan: () -> Unit, onOpenDeviceRadio: () -> Unit) {
+private fun ScannerScreen(state: RadioUiState, onScan: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(15.dp)) {
         ScreenHeading("Station scanner")
@@ -604,7 +593,7 @@ private fun ScannerScreen(state: RadioUiState, onScan: () -> Unit, onOpenDeviceR
                 Spacer(Modifier.height(15.dp))
                 Text("Scan FM band", color = RadioText, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(7.dp))
-                Text("Search available FM frequencies on a supported receiver.",
+                Text("Search the FM band using Radio's connected hardware tuner.",
                     color = RadioMuted, fontSize = 12.sp, lineHeight = 18.sp)
                 Spacer(Modifier.height(17.dp))
                 Button(onClick = onScan, enabled = !state.isScanning,
@@ -613,19 +602,6 @@ private fun ScannerScreen(state: RadioUiState, onScan: () -> Unit, onOpenDeviceR
                     Text(if (state.isScanning) "SCANNING..." else "START SCAN", fontWeight = FontWeight.Bold)
                 }
             }
-        }
-        if (state.oemRadioAppName != null) {
-            InfoPanel("Device radio detected",
-                "${state.oemRadioAppName} is installed. The phone's system radio app handles FM tuning.",
-                RadioAccent)
-            OutlinedButton(onClick = onOpenDeviceRadio,
-                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp)) {
-                Text("OPEN DEVICE RADIO")
-            }
-        } else {
-            InfoPanel("FM hardware access",
-                "FM access varies by model. A wired headset may also be required as the antenna.",
-                RadioWarning)
         }
         IsackFooter()
     }
@@ -714,8 +690,17 @@ private fun NoticeBanner(message: String, onDismiss: () -> Unit) {
 @Composable
 private fun IsackFooter() {
     val context = androidx.compose.ui.platform.LocalContext.current
-    Box(Modifier.fillMaxWidth().padding(top = 15.dp, bottom = 15.dp),
-        contentAlignment = Alignment.Center) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 15.dp, bottom = 15.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Image(
+            painter = painterResource(R.drawable.footerimage),
+            contentDescription = null,
+            modifier = Modifier.size(17.dp).clip(CircleShape)
+        )
+        Spacer(Modifier.width(6.dp))
         Text("Isack Ochieng", color = RadioMuted.copy(alpha = .72f), fontSize = 11.sp,
             fontFamily = FontFamily.Serif, textDecoration = TextDecoration.None,
             modifier = Modifier.clickable {
