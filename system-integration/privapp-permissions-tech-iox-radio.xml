@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<permissions>
+    <privapp-permissions package="tech.iox.freeradio">
+        <permission name="android.permission.ACCESS_BROADCAST_RADIO" />
+    </privapp-permissions>
+</permissions>
