@@ -32,7 +32,7 @@ A 3.5 mm wired headset is the FM antenna on some devices (including documented I
 
 - Each reminder stores a show name, frequency, weekday, time, and enabled state locally.
 - Android exact-alarm access is requested through system settings where available. If not granted, the app schedules an inexact idle-allowed fallback and tells the user.
-- Android 13+ notification permission is required for the reminder notification to appear in the notification drawer. The audible alarm service is separate from the notification channel.
+- Android 13+ notification permission is required for the reminder notification to appear. Exact alarms can start the ringing foreground service; if Android restricts a background service for an approximate alarm, Radio falls back to a high-priority notification with alarm sound and vibration.
 - The alarm tone uses the handset's default alarm ringtone and loops on supported Android versions until dismissed or snoozed.
 - Weekly alarms are restored after reboot and after system time/time-zone changes.
 
