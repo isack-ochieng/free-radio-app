@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.Ringtone
@@ -172,5 +173,96 @@ class ReminderAlertService : Service() {
 
         private const val CHANNEL_ID = "radio_show_reminders"
         private const val NOTIFICATION_ID = 7300
+    }
+}
+
+
+object ReminderFallbackNotifier {
+    private const val CHANNEL_ID = "radio_show_reminders_fallback"
+    private const val ID_BASE = 18000
+
+    fun show(context: Context, reminder: ShowReminder, isSnooze: Boolean) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Show reminder alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Sound and vibration for scheduled radio shows"
+                if (alarmUri != null) {
+                    setSound(
+                        alarmUri,
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                    )
+                }
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 650, 300, 650, 300, 900)
+            }
+            manager.createNotificationChannel(channel)
+        }
+
+        val notificationId = ID_BASE + (reminder.id.toInt() and 0x0000FFFF)
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            action = MainActivity.ACTION_OPEN_REMINDER
+            putExtra(ShowReminderScheduler.EXTRA_FREQUENCY, reminder.frequencyMhz)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val contentPendingIntent = PendingIntent.getActivity(
+            context,
+            reminder.id.toInt(),
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val snoozeIntent = Intent(context, ReminderSnoozeReceiver::class.java).apply {
+            putExtra(ShowReminderScheduler.EXTRA_REMINDER_ID, reminder.id)
+        }
+        val dismissIntent = Intent(context, ReminderDismissReceiver::class.java).apply {
+            putExtra(ShowReminderScheduler.EXTRA_REMINDER_ID, reminder.id)
+        }
+        val snoozePendingIntent = PendingIntent.getBroadcast(
+            context,
+            reminder.id.toInt() xor 0x310000,
+            snoozeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val dismissPendingIntent = PendingIntent.getBroadcast(
+            context,
+            reminder.id.toInt() xor 0x420000,
+            dismissIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentTitle(reminder.title)
+            .setContentText(
+                String.format(
+                    Locale.getDefault(),
+                    "%s · %.1f MHz",
+                    if (isSnooze) "Reminder" else "It's time",
+                    reminder.frequencyMhz
+                )
+            )
+            .setContentIntent(contentPendingIntent)
+            .setDeleteIntent(dismissPendingIntent)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setAutoCancel(true)
+            .addAction(android.R.drawable.ic_lock_idle_alarm, "Snooze 5 min", snoozePendingIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Dismiss", dismissPendingIntent)
+            .build()
+
+        manager.notify(notificationId, notification)
+    }
+
+    fun dismiss(context: Context, reminderId: Long) {
+        val notificationId = ID_BASE + (reminderId.toInt() and 0x0000FFFF)
+        context.getSystemService(NotificationManager::class.java).cancel(notificationId)
     }
 }
