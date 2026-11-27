@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "tech.iox.freeradio"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "tech.iox.freeradio"
