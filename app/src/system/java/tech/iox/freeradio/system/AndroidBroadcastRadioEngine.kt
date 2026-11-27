@@ -45,8 +45,10 @@ class AndroidBroadcastRadioEngine(context: Context) : RadioEngine {
         }
     }.getOrNull()
 
-    private val fmModule: FmModule? = if (hasPermission && manager != null) {
-        runCatching { discoverFmModule(manager) }.getOrNull()
+    private val fmModule: FmModule? = if (hasPermission) {
+        manager?.let { service ->
+            runCatching { discoverFmModule(service) }.getOrNull()
+        }
     } else {
         null
     }
@@ -112,6 +114,7 @@ class AndroidBroadcastRadioEngine(context: Context) : RadioEngine {
 
         runCatching { activeTuner.setMute(true) }
         runCatching { activeTuner.close() }
+        Unit
     }
 
     override suspend fun tune(frequencyMhz: Float): Boolean = withContext(Dispatchers.IO) {
