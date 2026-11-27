@@ -54,6 +54,14 @@
             android:exported="false" />
 
         <receiver
+            android:name=".reminders.ReminderSnoozeReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".reminders.ReminderDismissReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".reminders.ReminderRescheduleReceiver"
             android:enabled="true"
             android:exported="false">
