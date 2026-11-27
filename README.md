@@ -1,43 +1,60 @@
 # Radio
 
-A native Android FM tuner companion focused on saved frequencies, scheduled show reminders, and a compact listening interface.
+A native Android FM radio application with local station presets, weekly show reminders, audible alarm alerts, and hardware volume controls.
 
 ## App identity
 
 - App name: Radio
-- Android application ID: `tech.iox.freeradio`
+- Android application ID: `tech.iox.freeradio` (unchanged)
 - Native stack: Kotlin + Jetpack Compose
 - Minimum Android version: 8.0 (API 26)
 - Attribution: Isack Ochieng — https://isack-ochieng.pages.dev
 
 ## Features
 
-- Manual FM frequency selection and local favourites.
-- Recurring weekly show reminders by title, frequency, weekday, and time.
-- Audible alarm-tone alerts with Snooze 5 min and Dismiss actions.
-- Reminder persistence and rescheduling after device reboot, time changes, and time-zone changes.
-- Wired-headset and Bluetooth audio route detection.
+- FM frequency dial with 0.1 MHz tuning.
+- Station scanning through Android's connected Broadcast Radio tuner.
+- Local favourite frequencies.
+- Recurring weekly show reminders by show name, frequency, weekday, and time.
+- Audible reminder alarms with Snooze 5 min and Dismiss actions.
+- Reminder restoration after reboot, time changes, and time-zone changes.
 - Hardware volume-key routing and in-app volume controls.
-- Best-effort handoff to installed OEM FM radio apps where the handset keeps tuner access privileged.
+- Compact footer attribution using the repository's `footerimage.png`.
 
-## FM hardware compatibility
+## Build variants and FM access
 
-Android does not provide a universal public FM tuner API to ordinary third-party phone apps. On some handsets, the stock radio is a privileged preinstalled system app with access to the broadcast radio HAL and audio routing permissions. This app cannot acquire those signature/privileged permissions merely by declaring them.
+There are two product flavors:
 
-Where the stock FM application is installed, Radio can open it. The Transsion radio package is checked for Infinix, TECNO, and itel devices; Samsung and other known OEM radio packages are checked as well. This handoff is not equivalent to controlling the phone's receiver from inside Radio. True in-app FM tuning requires a public vendor API, an OEM partnership/system signature, or a separately validated hardware integration for the exact model.
+- `play`: ordinary Play Store distribution; it does not request privileged Broadcast Radio access.
+- `system`: includes the Android Broadcast Radio API adapter and declares `ACCESS_BROADCAST_RADIO`.
 
-A 3.5 mm wired headset is the FM antenna on some devices (including documented Infinix models). Bluetooth headphones are audio output only and cannot act as the FM antenna.
+The system adapter discovers an actual FM module through Android's Broadcast Radio service, opens a tuner, tunes frequencies, and scans the FM band. It does not launch the phone manufacturer's radio application.
+
+**Important:** Android's Broadcast Radio framework and tuner permission are system/privileged interfaces. The system APK must be installed as a privileged app in a system partition, and the permission must be allowlisted on that same partition. Installing the APK as a normal app or merely declaring the permission does not grant access. Device firmware must also expose a functioning FM Broadcast Radio HAL. Some Infinix/Transsion builds use a proprietary MediaTek FM service instead; those builds may require a model-specific adapter and vendor libraries.
+
+The repository includes the privileged permission allowlist and Magisk overlay layout in `system-integration/`. CI packages `radio-system-magisk.zip` with the system release APK. Rooting, unlocking a bootloader, and system overlays carry device-specific risks. Back up the device and only use a module verified against the exact firmware.
+
+## R8 and release artifacts
+
+Both release flavors enable R8 code shrinking, obfuscation, and resource shrinking. CI preserves generated `mapping.txt` files so minified crash reports can be retraced.
+
+Local build commands:
+
+```bash
+gradle testPlayDebugUnitTest testSystemDebugUnitTest
+gradle assemblePlayRelease assembleSystemRelease
+```
+
+CI signs release test artifacts with the ephemeral Android debug key only so they can be installed for size and behavior testing. This key is **not** a Google Play upload key. Configure a private upload key for Play publication; never commit the keystore or passwords.
 
 ## Show reminders
 
-- Each reminder stores a show name, frequency, weekday, time, and enabled state locally.
-- Android exact-alarm access is requested through system settings where available. If not granted, the app schedules an inexact idle-allowed fallback and tells the user.
-- Android 13+ notification permission is required for the reminder notification to appear. Exact alarms can start the ringing foreground service; if Android restricts a background service for an approximate alarm, Radio falls back to a high-priority notification with alarm sound and vibration.
-- The alarm tone uses the handset's default alarm ringtone and loops on supported Android versions until dismissed or snoozed.
-- Weekly alarms are restored after reboot and after system time/time-zone changes.
+- Each reminder stores its show name, frequency, weekday, time, and enabled state locally.
+- Android exact-alarm access is requested through system settings where available. Without it, the app falls back to an inexact idle-allowed schedule.
+- Android 13+ notification permission is needed for reminder alerts.
+- Alarm alerts use the handset's default alarm ringtone and loop on supported Android versions until dismissed or snoozed.
+- Weekly alarms are restored after reboot and system time/time-zone changes.
 
-## Build
+## Device validation
 
-Open the project in Android Studio with JDK 17 and the Android SDK required by the configured compile SDK. Run the `testDebugUnitTest` and `assembleDebug` Gradle tasks.
-
-The device-specific FM tuner itself remains dependent on OEM hardware access. Do not present the in-app tuner as working on a device until physical tuning, scanning, and audio routing have been validated on that exact model.
+A successful build does not prove that FM works on every handset. Test module discovery, permission grant, wired antenna requirements, real reception, station scanning, background playback, and audio routing on each target model and firmware before declaring the device supported.
