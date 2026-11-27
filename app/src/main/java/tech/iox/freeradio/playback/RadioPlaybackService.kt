@@ -20,17 +20,19 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import tech.iox.freeradio.MainActivity
 import tech.iox.freeradio.core.RadioEngineProvider
+import java.util.Locale
 
 /**
  * Holds a validated tuner session outside the Activity and publishes standard
  * Android media controls for notifications, lock screens and headset buttons.
- * The actual audio path is supplied by a device-specific FM adapter.
+ * The device-specific adapter supplies the actual FM receiver/audio path.
  */
 class RadioPlaybackService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var audioManager: AudioManager
     private var mediaSession: MediaSession? = null
     private var focusRequest: AudioFocusRequest? = null
+    private var lastFrequency = DEFAULT_FREQUENCY
 
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
         if (change == AudioManager.AUDIOFOCUS_LOSS ||
@@ -41,14 +43,17 @@ class RadioPlaybackService : Service() {
     override fun onCreate() {
         super.onCreate()
         audioManager = getSystemService(AudioManager::class.java)
+        lastFrequency = getSharedPreferences(PREFERENCES, MODE_PRIVATE)
+            .getFloat(KEY_FREQUENCY, DEFAULT_FREQUENCY)
         createNotificationChannel()
+
         mediaSession = MediaSession(this, "Free Radio").apply {
             setFlags(
                 MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or
                     MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
             )
             setCallback(object : MediaSession.Callback() {
-                override fun onPlay() = startPlayback()
+                override fun onPlay() = startPlayback(lastFrequency)
                 override fun onPause() = pausePlayback()
                 override fun onStop() = stopPlayback()
             })
@@ -66,25 +71,37 @@ class RadioPlaybackService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_PLAY -> startPlayback()
+            ACTION_PLAY -> startPlayback(
+                intent.getFloatExtra(EXTRA_FREQUENCY, lastFrequency)
+            )
             ACTION_PAUSE -> pausePlayback()
             ACTION_STOP -> stopPlayback()
+            null -> startPlayback(lastFrequency)
         }
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
-    private fun startPlayback() {
+    private fun startPlayback(frequencyMhz: Float) {
+        lastFrequency = frequencyMhz.coerceIn(87.5f, 108.0f)
+        getSharedPreferences(PREFERENCES, MODE_PRIVATE).edit()
+            .putFloat(KEY_FREQUENCY, lastFrequency)
+            .apply()
         startForeground(NOTIFICATION_ID, buildNotification(playing = true))
+
         scope.launch {
-            if (!requestAudioFocus()) {
-                stopPlayback()
+            val engine = RadioEngineProvider.get(this@RadioPlaybackService)
+            if (!engine.isSupported || !requestAudioFocus()) {
+                finishPlayback(engine)
                 return@launch
             }
-            val started = RadioEngineProvider.get(this@RadioPlaybackService).start()
-            if (!started) {
-                stopPlayback()
+
+            val started = engine.start()
+            val tuned = started && engine.tune(lastFrequency)
+            if (!tuned) {
+                finishPlayback(engine)
                 return@launch
             }
+
             publishState(playing = true)
             getSystemService(NotificationManager::class.java)
                 .notify(NOTIFICATION_ID, buildNotification(playing = true))
@@ -93,15 +110,21 @@ class RadioPlaybackService : Service() {
 
     private fun pausePlayback() {
         scope.launch {
-            RadioEngineProvider.get(this@RadioPlaybackService).pause()
-            publishState(playing = false)
-            abandonAudioFocus()
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
+            finishPlayback(RadioEngineProvider.get(this@RadioPlaybackService))
         }
     }
 
     private fun stopPlayback() = pausePlayback()
+
+    private suspend fun finishPlayback(
+        engine: tech.iox.freeradio.core.RadioEngine
+    ) {
+        runCatching { engine.pause() }
+        publishState(playing = false)
+        abandonAudioFocus()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
 
     private fun requestAudioFocus(): Boolean {
         val attributes = AudioAttributes.Builder()
@@ -123,11 +146,13 @@ class RadioPlaybackService : Service() {
     }
 
     private fun publishState(playing: Boolean) {
+        val frequencyLabel = String.format(Locale.US, "FM %.1f MHz", lastFrequency)
         val actions = PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or
             PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_STOP
+
         mediaSession?.setMetadata(
             MediaMetadata.Builder()
-                .putString(MediaMetadata.METADATA_KEY_TITLE, "FM Radio")
+                .putString(MediaMetadata.METADATA_KEY_TITLE, frequencyLabel)
                 .putString(MediaMetadata.METADATA_KEY_ARTIST, "Free Radio")
                 .build()
         )
@@ -147,7 +172,10 @@ class RadioPlaybackService : Service() {
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle("Free Radio")
-            .setContentText(if (playing) "Playing FM radio" else "Radio paused")
+            .setContentText(
+                if (playing) String.format(Locale.US, "Tuned to %.1f MHz", lastFrequency)
+                else "Radio paused"
+            )
             .setContentIntent(
                 PendingIntent.getActivity(
                     this,
@@ -161,7 +189,8 @@ class RadioPlaybackService : Service() {
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .addAction(
-                if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
+                if (playing) android.R.drawable.ic_media_pause
+                else android.R.drawable.ic_media_play,
                 if (playing) "Pause" else "Play",
                 serviceIntent(if (playing) ACTION_PAUSE else ACTION_PLAY)
             )
@@ -176,7 +205,9 @@ class RadioPlaybackService : Service() {
         PendingIntent.getService(
             this,
             action.hashCode(),
-            Intent(this, RadioPlaybackService::class.java).setAction(action),
+            Intent(this, RadioPlaybackService::class.java)
+                .setAction(action)
+                .putExtra(EXTRA_FREQUENCY, lastFrequency),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
@@ -209,7 +240,11 @@ class RadioPlaybackService : Service() {
         const val ACTION_PLAY = "tech.iox.freeradio.action.PLAY"
         const val ACTION_PAUSE = "tech.iox.freeradio.action.PAUSE"
         const val ACTION_STOP = "tech.iox.freeradio.action.STOP"
+        const val EXTRA_FREQUENCY = "extra_frequency_mhz"
         private const val CHANNEL_ID = "free_radio_playback"
         private const val NOTIFICATION_ID = 4102
+        private const val PREFERENCES = "radio_playback_state"
+        private const val KEY_FREQUENCY = "last_frequency"
+        private const val DEFAULT_FREQUENCY = 98.4f
     }
 }
