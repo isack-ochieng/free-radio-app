@@ -201,8 +201,9 @@ object ShowReminderScheduler {
         snooze: Boolean
     ): PendingIntent {
         val requestCode = (id xor if (snooze) SNOOZE_REQUEST_MASK else 0L).toInt()
+        val alarmKind = if (snooze) "snooze" else "weekly"
         val intent = Intent(context, ShowReminderAlarmReceiver::class.java).apply {
-            data = Uri.parse("radio-reminder://$id/\u0024{if (snooze) "snooze" else "weekly"}")
+            data = Uri.parse("radio-reminder://$id/$alarmKind")
             putExtra(EXTRA_REMINDER_ID, id)
             putExtra(EXTRA_IS_SNOOZE, snooze)
         }
