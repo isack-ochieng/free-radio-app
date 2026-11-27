@@ -27,7 +27,29 @@ class ShowReminderAlarmReceiver : BroadcastReceiver() {
             putExtra(ReminderAlertService.EXTRA_TITLE, reminder.title)
             putExtra(ShowReminderScheduler.EXTRA_IS_SNOOZE, isSnooze)
         }
-        ContextCompat.startForegroundService(context, alertIntent)
+        try {
+            ContextCompat.startForegroundService(context, alertIntent)
+        } catch (_: RuntimeException) {
+            // Android can block a background foreground-service launch when only
+            // an inexact alarm is available. Preserve the reminder as a ringing notification.
+            ReminderFallbackNotifier.show(context, reminder, isSnooze)
+        }
+    }
+}
+
+class ReminderSnoozeReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val id = intent.getLongExtra(ShowReminderScheduler.EXTRA_REMINDER_ID, -1L)
+        val reminder = ShowReminderStore(context).find(id) ?: return
+        ShowReminderScheduler.scheduleSnooze(context, reminder)
+        ReminderFallbackNotifier.dismiss(context, reminder.id)
+    }
+}
+
+class ReminderDismissReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val id = intent.getLongExtra(ShowReminderScheduler.EXTRA_REMINDER_ID, -1L)
+        ReminderFallbackNotifier.dismiss(context, id)
     }
 }
 
