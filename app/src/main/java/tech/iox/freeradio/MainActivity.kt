@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        ShowReminderScheduler.rescheduleAll(this)
         radioViewModel.refreshReminders()
     }
 
