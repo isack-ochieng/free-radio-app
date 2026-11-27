@@ -4,3 +4,6 @@
 
 # Retain useful source/line information for retracing obfuscated crash reports.
 -keepattributes SourceFile,LineNumberTable
+
+# Android framework stubs contain a legacy Cleaner reference absent from modern JDKs.
+-dontwarn sun.misc.Cleaner
