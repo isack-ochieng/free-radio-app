@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
+import androidx.compose.material.icons.outlined.VolumeDown
 import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -340,15 +341,39 @@ private fun RadioHomeScreen(
                     }
                     Text((state.volume * 100).toInt().toString() + "%", color = RadioAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
-                Slider(
-                    value = state.volume,
-                    onValueChange = onVolume,
-                    colors = SliderDefaults.colors(
-                        thumbColor = RadioAccent,
-                        activeTrackColor = RadioAccent,
-                        inactiveTrackColor = RadioSurfaceRaised
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { onVolume((state.volume - 0.05f).coerceAtLeast(0f)) }
+                    ) {
+                        Icon(
+                            Icons.Outlined.VolumeDown,
+                            contentDescription = "Decrease volume",
+                            tint = RadioMuted
+                        )
+                    }
+                    Slider(
+                        value = state.volume,
+                        onValueChange = onVolume,
+                        modifier = Modifier.weight(1f),
+                        colors = SliderDefaults.colors(
+                            thumbColor = RadioAccent,
+                            activeTrackColor = RadioAccent,
+                            inactiveTrackColor = RadioSurfaceRaised
+                        )
                     )
-                )
+                    IconButton(
+                        onClick = { onVolume((state.volume + 0.05f).coerceAtMost(1f)) }
+                    ) {
+                        Icon(
+                            Icons.Outlined.VolumeUp,
+                            contentDescription = "Increase volume",
+                            tint = RadioMuted
+                        )
+                    }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         if (state.audioRoute.bluetoothOutputConnected) Icons.Outlined.Bluetooth else Icons.Outlined.Headphones,
