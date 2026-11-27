@@ -36,13 +36,35 @@ jobs:
         with:
           gradle-version: "9.8.2"
 
-      - name: Run unit tests and assemble debug APK
-        run: gradle testDebugUnitTest assembleDebug
+      - name: Run tests and build optimized release variants
+        run: |
+          gradle testPlayDebugUnitTest testSystemDebugUnitTest assemblePlayRelease assembleSystemRelease -PciDebugSigning=true
 
-      - name: Upload debug APK
+      - name: Report optimized APK sizes
+        run: |
+          stat -c "%n %s bytes" app/build/outputs/apk/play/release/app-play-release.apk
+          stat -c "%n %s bytes" app/build/outputs/apk/system/release/app-system-release.apk
+
+      - name: Package privileged system install module
+        run: |
+          set -euo pipefail
+          mkdir -p build/radio-magisk/system/system_ext/priv-app/Radio
+          mkdir -p build/radio-magisk/system/system_ext/etc/permissions
+          cp app/build/outputs/apk/system/release/app-system-release.apk build/radio-magisk/system/system_ext/priv-app/Radio/Radio.apk
+          cp system-integration/privapp-permissions-tech-iox-radio.xml build/radio-magisk/system/system_ext/etc/permissions/
+          cp system-integration/module.prop build/radio-magisk/module.prop
+          cd build/radio-magisk
+          zip -qr ../radio-system-magisk.zip .
+
+      - name: Upload optimized APKs, mappings and system module
         uses: actions/upload-artifact@v4
         with:
-          name: free-radio-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: radio-0.3.0-release
+          path: |
+            app/build/outputs/apk/play/release/app-play-release.apk
+            app/build/outputs/apk/system/release/app-system-release.apk
+            app/build/outputs/mapping/playRelease/mapping.txt
+            app/build/outputs/mapping/systemRelease/mapping.txt
+            build/radio-system-magisk.zip
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
