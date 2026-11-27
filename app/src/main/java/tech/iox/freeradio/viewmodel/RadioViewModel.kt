@@ -67,6 +67,12 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
     fun tuneTo(value: Float) {
         val frequency = RadioFrequency.normalize(value)
         _uiState.update { it.copy(frequencyMhz = frequency, notice = null) }
+        getApplication<Application>()
+            .getSharedPreferences("radio_playback_state", 0)
+            .edit()
+            .putFloat("last_frequency", frequency)
+            .apply()
+
         if (radioEngine.isSupported) {
             viewModelScope.launch { radioEngine.tune(frequency) }
         }
@@ -152,6 +158,7 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
 
         val intent = Intent(app, RadioPlaybackService::class.java).apply {
             action = RadioPlaybackService.ACTION_PLAY
+            putExtra(RadioPlaybackService.EXTRA_FREQUENCY, _uiState.value.frequencyMhz)
         }
         ContextCompat.startForegroundService(app, intent)
         _uiState.update { it.copy(isPlaying = true, notice = null) }
