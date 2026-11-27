@@ -1,0 +1,6 @@
+id=radio-fm-system
+name=Radio FM System Integration
+version=0.3.0
+versionCode=3
+author=Isack Ochieng
+description=Installs Radio as a privileged app and allowlists Android Broadcast Radio access.
