@@ -11,9 +11,36 @@ android {
         applicationId = "tech.iox.freeradio"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    flavorDimensions += "distribution"
+
+    productFlavors {
+        create("play") {
+            dimension = "distribution"
+        }
+        create("system") {
+            dimension = "distribution"
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            // CI-only debug signing makes optimized test APKs installable.
+            // Use a private upload key for Google Play publication.
+            if (providers.gradleProperty("ciDebugSigning").orNull == "true") {
+                signingConfig = signingConfigs.getByName("debug")
+            }
+        }
     }
 
     buildFeatures {
@@ -49,4 +76,10 @@ dependencies {
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
+}
+
+
+dependencies {
+    // System API compile stubs only; this 200 MB framework jar is never packaged.
+    add("systemCompileOnly", "org.robolectric:android-all:16-robolectric-13921718")
 }
