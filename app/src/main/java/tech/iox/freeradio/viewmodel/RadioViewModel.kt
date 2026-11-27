@@ -15,12 +15,16 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import tech.iox.freeradio.core.AudioRouteMonitor
 import tech.iox.freeradio.core.AudioRouteState
+import tech.iox.freeradio.core.OemRadioLauncher
 import tech.iox.freeradio.core.RadioEngineProvider
 import tech.iox.freeradio.core.RadioFrequency
 import tech.iox.freeradio.core.RadioStation
 import tech.iox.freeradio.core.StationStore
 import tech.iox.freeradio.core.VolumeController
 import tech.iox.freeradio.playback.RadioPlaybackService
+import tech.iox.freeradio.reminders.ShowReminder
+import tech.iox.freeradio.reminders.ShowReminderScheduler
+import tech.iox.freeradio.reminders.ShowReminderStore
 import java.util.Locale
 
 data class RadioUiState(
@@ -28,8 +32,10 @@ data class RadioUiState(
     val isPlaying: Boolean = false,
     val isScanning: Boolean = false,
     val favourites: List<RadioStation> = emptyList(),
+    val reminders: List<ShowReminder> = emptyList(),
     val audioRoute: AudioRouteState = AudioRouteState(),
     val volume: Float = 0.5f,
+    val oemRadioAppName: String? = null,
     val notice: String? = null
 ) {
     val currentStationName: String
@@ -40,14 +46,20 @@ data class RadioUiState(
 
 class RadioViewModel(application: Application) : AndroidViewModel(application) {
     private val stationStore = StationStore(application)
+    private val reminderStore = ShowReminderStore(application)
     private val radioEngine = RadioEngineProvider.get(application)
     private val volumeController = VolumeController(application)
+    private val installedOemRadio = OemRadioLauncher.findInstalled(application)
     private val routeMonitor = AudioRouteMonitor(application) { route ->
         _uiState.update { it.copy(audioRoute = route) }
     }
 
     private val _uiState = MutableStateFlow(
-        RadioUiState(volume = volumeController.currentLevel())
+        RadioUiState(
+            volume = volumeController.currentLevel(),
+            reminders = reminderStore.all(),
+            oemRadioAppName = installedOemRadio?.label
+        )
     )
     val uiState: StateFlow<RadioUiState> = _uiState.asStateFlow()
 
@@ -106,8 +118,8 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
     fun scan() {
         if (!radioEngine.isSupported) {
             showNotice(
-                "This phone has not exposed an FM receiver to Free Radio. " +
-                    "Scanning will be enabled when a compatible tuner adapter is available."
+                "This phone controls FM through its own radio software. " +
+                    "Use the device radio option below when it is available."
             )
             return
         }
@@ -123,7 +135,7 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
                             notice = if (found.isEmpty()) {
                                 "No stations were found in this scan."
                             } else {
-                                "Found " + found.size + " station(s). Saved locally."
+                                "Found " + found.size + " station(s)."
                             }
                         )
                     }
@@ -149,9 +161,13 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         if (!radioEngine.isSupported) {
+            val appName = _uiState.value.oemRadioAppName
             showNotice(
-                "FM hardware is not available to this app on this phone. " +
-                    "Your saved frequencies remain available locally."
+                if (appName != null) {
+                    "$appName manages the FM receiver on this phone. Open the device radio below to listen."
+                } else {
+                    "This phone has not exposed its FM receiver to third-party apps."
+                }
             )
             return
         }
@@ -162,6 +178,58 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
         }
         ContextCompat.startForegroundService(app, intent)
         _uiState.update { it.copy(isPlaying = true, notice = null) }
+    }
+
+    fun openDeviceRadio() {
+        val app = getApplication<Application>()
+        val opened = OemRadioLauncher.launch(app)
+        showNotice(
+            when {
+                opened -> "Opened the phone's FM radio. Its built-in app controls the receiver on this model."
+                _uiState.value.oemRadioAppName != null ->
+                    "The phone's FM radio app could not be opened. Check that it is enabled in Settings."
+                else ->
+                    "No compatible built-in FM radio app was found on this phone."
+            }
+        )
+    }
+
+    fun saveReminder(reminder: ShowReminder) {
+        val app = getApplication<Application>()
+        reminderStore.save(reminder)
+        val exact = ShowReminderScheduler.schedule(app, reminder)
+        _uiState.update {
+            it.copy(
+                reminders = reminderStore.all(),
+                notice = if (exact) {
+                    "Reminder saved."
+                } else {
+                    "Reminder saved. Allow Alarms & reminders in Android Settings for the most precise timing."
+                }
+            )
+        }
+    }
+
+    fun toggleReminder(reminder: ShowReminder) {
+        val updated = reminder.copy(enabled = !reminder.enabled)
+        reminderStore.save(updated)
+        ShowReminderScheduler.schedule(getApplication(), updated)
+        _uiState.update { it.copy(reminders = reminderStore.all()) }
+    }
+
+    fun deleteReminder(reminder: ShowReminder) {
+        ShowReminderScheduler.cancel(getApplication(), reminder.id)
+        reminderStore.delete(reminder.id)
+        _uiState.update {
+            it.copy(
+                reminders = reminderStore.all(),
+                notice = "Reminder deleted."
+            )
+        }
+    }
+
+    fun refreshReminders() {
+        _uiState.update { it.copy(reminders = reminderStore.all()) }
     }
 
     fun setVolume(level: Float) {
