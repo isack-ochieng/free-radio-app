@@ -1,15 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <queries>
-        <package android:name="com.transsion.fmradio" />
-        <package android:name="com.funbase.xradio" />
-        <package android:name="com.sec.android.app.fm" />
-        <package android:name="com.miui.fmradio" />
-        <package android:name="com.android.fmradio" />
-        <package android:name="com.lge.fmradio" />
-        <package android:name="com.huawei.android.FMRadio" />
-    </queries>
 
     <uses-feature
         android:name="android.hardware.audio.output"
