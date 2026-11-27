@@ -109,18 +109,24 @@ class StationStore(context: Context) {
 }
 
 /**
- * A device-specific adapter must implement this contract after its FM access path
- * has been validated. Do not infer FM support from audio-device presence alone.
+ * An FM receiver adapter. The standard Play variant intentionally has no
+ * privileged adapter; the system variant supplies one when Android exposes
+ * an FM Broadcast Radio module and grants the required system permission.
  */
 interface RadioEngine {
     val isSupported: Boolean
+    val unavailableReason: String
+        get() = "Direct FM access is unavailable in this installation. The system-integrated build requires privileged Broadcast Radio access and a device FM HAL."
     suspend fun start(): Boolean
     suspend fun pause()
     suspend fun tune(frequencyMhz: Float): Boolean
     suspend fun scan(): List<RadioStation>
 }
 
-class UnavailableRadioEngine : RadioEngine {
+class UnavailableRadioEngine(
+    override val unavailableReason: String =
+        "Direct FM access is unavailable in this installation. The system-integrated build requires privileged Broadcast Radio access and a device FM HAL."
+) : RadioEngine {
     override val isSupported = false
     override suspend fun start() = false
     override suspend fun pause() = Unit
@@ -129,13 +135,24 @@ class UnavailableRadioEngine : RadioEngine {
 }
 
 object RadioEngineProvider {
+    private const val SYSTEM_ENGINE_CLASS =
+        "tech.iox.freeradio.system.AndroidBroadcastRadioEngine"
+
     @Volatile
     private var instance: RadioEngine? = null
 
     fun get(context: Context): RadioEngine =
         instance ?: synchronized(this) {
-            instance ?: UnavailableRadioEngine().also { instance = it }
+            instance ?: createEngine(context).also { instance = it }
         }
+
+    private fun createEngine(context: Context): RadioEngine = runCatching {
+        val engineClass = Class.forName(SYSTEM_ENGINE_CLASS)
+        val constructor = engineClass.getDeclaredConstructor(Context::class.java)
+        constructor.newInstance(context.applicationContext) as RadioEngine
+    }.getOrElse {
+        UnavailableRadioEngine()
+    }
 
     fun install(engine: RadioEngine) {
         synchronized(this) {
